@@ -1,0 +1,391 @@
+{
+  "behaviorSchemaVersion": "integration.behaviors.v2",
+  "templates": [
+    {
+      "id": "notify_on_state_change",
+      "label": "Tell me when this device changes",
+      "description": "Starts from a saved device update and sends a simple notification.",
+      "category": "Starter",
+      "deviceKey": "piphi_network_zigbee_device",
+      "config": {
+        "automation_schema_version": "automation.behavior.v2",
+        "triggers": [
+          {
+            "id": "state_changed",
+            "label": "Device updates",
+            "type": "integration_event",
+            "event": "device.state_changed",
+            "capability": "telemetry.state",
+            "enabled": true,
+            "sourceRef": {
+              "integrationId": "{{integrationId}}",
+              "integrationKey": "{{integrationKey}}",
+              "configId": "{{configId}}",
+              "behaviorDeviceKey": "piphi_network_zigbee_device",
+              "optionKey": "state_changed",
+              "capability": "telemetry.state"
+            }
+          }
+        ],
+        "trigger": {
+          "id": "state_changed",
+          "label": "Device updates",
+          "type": "integration_event",
+          "event": "device.state_changed",
+          "capability": "telemetry.state",
+          "enabled": true
+        },
+        "intent": "keep_updated",
+        "conditionTree": {
+          "op": "and",
+          "children": []
+        },
+        "actions": [
+          {
+            "id": "starter_notification",
+            "label": "Send notification",
+            "action": "refresh",
+            "sourceRef": {
+              "integrationId": "{{integrationId}}",
+              "integrationKey": "{{integrationKey}}",
+              "configId": "{{configId}}",
+              "behaviorDeviceKey": "piphi_network_zigbee_device",
+              "optionKey": "refresh"
+            },
+            "target": {
+              "mode": "selection",
+              "configIds": [
+                "{{configId}}"
+              ]
+            },
+            "failure": {
+              "strategy": "retry_then_continue",
+              "retry": {
+                "maxAttempts": 2,
+                "delaySeconds": 2,
+                "timeoutSeconds": 10,
+                "backoff": "fixed"
+              },
+              "continueOnPartialFailure": true
+            }
+          }
+        ],
+        "safety": {
+          "staleDataMode": "block",
+          "maxAgeSeconds": 300,
+          "requireFreshTrigger": true,
+          "dryRunFirst": false
+        },
+        "failure": {
+          "strategy": "follow_edges",
+          "fallbackBehaviorId": "",
+          "conditionTree": {
+            "op": "and",
+            "children": []
+          }
+        },
+        "stop": {
+          "never": true
+        },
+        "override": {
+          "mode": "continue"
+        },
+        "execution": {
+          "failureStrategy": "follow_edges",
+          "fallbackBehaviorId": "",
+          "dispatchMode": "runtime"
+        },
+        "policies": {
+          "execution": {
+            "failureStrategy": "follow_edges",
+            "fallbackBehaviorId": "",
+            "dispatchMode": "runtime"
+          },
+          "freshness": {
+            "staleDataMode": "block"
+          },
+          "manualOverride": {
+            "mode": "continue"
+          },
+          "cooldownSeconds": 0
+        }
+      },
+      "metadata": {
+        "generated": true,
+        "recommended": true
+      }
+    }
+  ],
+  "devices": [
+    {
+      "id": "piphi_network_zigbee_device",
+      "name": "PiPhi Network Zigbee",
+      "description": "Automation metadata for Zigbee devices managed through Zigbee2MQTT.",
+      "deviceClass": "smart_home_device",
+      "entityType": "zigbee_device",
+      "capabilities": [
+        "connected",
+        "availability",
+        "linkquality",
+        "temperature_c",
+        "humidity_percent",
+        "battery_percent",
+        "occupancy",
+        "contact_open",
+        "illuminance_lux",
+        "state",
+        "brightness_percent",
+        "color_temperature_mired",
+        "refresh",
+        "set_state",
+        "set_brightness",
+        "set_color_temperature"
+      ],
+      "targeting": {
+        "scopes": [
+          "config",
+          "configs",
+          "room",
+          "rooms",
+          "group",
+          "groups",
+          "tag",
+          "tags",
+          "capability",
+          "selection",
+          "all_matching"
+        ],
+        "fanout": {
+          "supported": true,
+          "defaultMode": "selection",
+          "allowedModes": [
+            "config",
+            "configs",
+            "room",
+            "rooms",
+            "group",
+            "groups",
+            "tag",
+            "tags",
+            "capability",
+            "selection",
+            "all_matching"
+          ]
+        }
+      },
+      "freshness": {
+        "maxAgeSeconds": 300,
+        "staleDataMode": "block"
+      },
+      "ui": {
+        "icon": "network",
+        "category": "bridge"
+      },
+      "triggers": [
+        {
+          "id": "state_changed",
+          "label": "Device updates",
+          "description": "Start when this device reports a new state.",
+          "capability": "telemetry.state",
+          "runtime": {
+            "event": "device.state_changed",
+            "source": "integration"
+          },
+          "freshness": {
+            "maxAgeSeconds": 300,
+            "staleDataMode": "block"
+          },
+          "ui": {
+            "group": "when"
+          }
+        }
+      ],
+      "intents": [
+        {
+          "id": "keep_updated",
+          "label": "Keep this device useful",
+          "description": "Build automations around this device's state and commands."
+        }
+      ],
+      "conditions": [
+        {
+          "id": "state_matches",
+          "label": "State matches",
+          "description": "Only run when a reported state value matches what you choose.",
+          "type": "text",
+          "capability": "telemetry.state",
+          "operators": [
+            "eq",
+            "neq",
+            "contains"
+          ],
+          "runtime": {
+            "source": "state",
+            "field": "state",
+            "operator": "eq"
+          },
+          "freshness": {
+            "maxAgeSeconds": 300,
+            "staleDataMode": "block"
+          },
+          "ui": {
+            "group": "only_if"
+          },
+          "params": [
+            {
+              "name": "field",
+              "label": "State field",
+              "type": "text",
+              "required": true
+            },
+            {
+              "name": "value",
+              "label": "Value",
+              "type": "text",
+              "required": true
+            }
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "id": "refresh",
+          "label": "Refresh",
+          "description": "Run refresh on the selected device.",
+          "capability": "device.refresh",
+          "capabilityRequirements": [
+            "device.refresh"
+          ],
+          "runtime": {
+            "command": "refresh",
+            "endpoint": "/command",
+            "method": "POST",
+            "timeoutSeconds": 30
+          },
+          "safety": {
+            "riskLevel": "low",
+            "requiresConfirmation": false,
+            "liveRunAllowed": true
+          },
+          "targeting": {
+            "fanoutSafe": true,
+            "supportsMultiTarget": true,
+            "scopes": [
+              "config",
+              "configs",
+              "room",
+              "rooms",
+              "group",
+              "groups",
+              "tag",
+              "tags",
+              "capability",
+              "selection",
+              "all_matching"
+            ]
+          },
+          "failure": {
+            "strategy": "retry_then_continue",
+            "retry": {
+              "maxAttempts": 1,
+              "delaySeconds": 2,
+              "backoff": "fixed"
+            },
+            "timeoutSeconds": 30,
+            "continueOnPartialFailure": true,
+            "idempotent": true
+          },
+          "ui": {
+            "group": "do_this"
+          }
+        },
+        {
+          "id": "set_state",
+          "label": "Set state",
+          "description": "Set an on/off style Zigbee device state.",
+          "capability": "action.set_state",
+          "capabilityRequirements": [
+            "action.set_state"
+          ],
+          "runtime": {
+            "command": "set_state",
+            "endpoint": "/command",
+            "method": "POST",
+            "timeoutSeconds": 30
+          },
+          "safety": {
+            "riskLevel": "medium",
+            "requiresConfirmation": false,
+            "liveRunAllowed": true
+          },
+          "targeting": {
+            "fanoutSafe": true,
+            "supportsMultiTarget": true,
+            "scopes": [
+              "config",
+              "configs",
+              "room",
+              "rooms",
+              "group",
+              "groups",
+              "tag",
+              "tags",
+              "capability",
+              "selection",
+              "all_matching"
+            ]
+          },
+          "failure": {
+            "strategy": "retry_then_continue",
+            "retry": {
+              "maxAttempts": 1,
+              "delaySeconds": 2,
+              "backoff": "fixed"
+            },
+            "timeoutSeconds": 30,
+            "continueOnPartialFailure": true,
+            "idempotent": true
+          },
+          "ui": {
+            "group": "do_this"
+          }
+        }
+      ],
+      "stop": [
+        {
+          "id": "after_duration",
+          "label": "After a set time",
+          "type": "duration",
+          "params": [
+            {
+              "name": "duration",
+              "label": "How long",
+              "type": "duration",
+              "default": "30m",
+              "required": true
+            }
+          ]
+        }
+      ],
+      "manualOverride": [
+        {
+          "id": "continue",
+          "label": "Keep running"
+        },
+        {
+          "id": "pause",
+          "label": "Pause",
+          "params": [
+            {
+              "name": "duration",
+              "label": "Pause time",
+              "type": "duration",
+              "default": "30m",
+              "required": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
