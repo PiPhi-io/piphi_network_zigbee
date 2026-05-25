@@ -183,6 +183,46 @@ async def test_command_route_publishes_zigbee2mqtt_dry_run() -> None:
 
 
 @pytest.mark.anyio
+async def test_config_sync_accepts_core_snapshot_payloads() -> None:
+    config_id = "snapshot-motion-sensor"
+    await runtime_state.remove_config(config_id)
+    runtime_state.runtime.set_current_generation(None)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/config/sync",
+            json={
+                "container_id": "runtime-1",
+                "generation": 12345,
+                "configs": [
+                    {
+                        "id": config_id,
+                        "container_id": "runtime-1",
+                        "friendly_name": "0xb40e060fffe7068b",
+                        "ieee_address": "0xb40e060fffe7068b",
+                        "alias": "Third Reality Wireless motion sensor",
+                        "mqtt_server": "mqtt://broker.local:1883",
+                        "mqtt_base_topic": "zigbee2mqtt",
+                        "capabilities": ["occupancy"],
+                    },
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "synced"
+    assert payload["generation"] == 12345
+    assert payload["applied"] == [config_id]
+    assert runtime_state.config_sync.get_current_generation() == 12345
+    assert runtime_state.registry.get(config_id)["alias"] == "Third Reality Wireless motion sensor"
+
+    await runtime_state.remove_config(config_id)
+    runtime_state.runtime.set_current_generation(None)
+
+
+@pytest.mark.anyio
 async def test_apply_config_starts_subscription_and_ingests_state(monkeypatch) -> None:
     started: list["FakeSubscriber"] = []
 

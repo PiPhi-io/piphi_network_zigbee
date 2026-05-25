@@ -23,6 +23,13 @@ from ..state import (
 router = APIRouter(tags=["config"])
 
 
+def _snapshot_configs_as_payloads(snapshot: RuntimeConfigSnapshot) -> list[dict[str, Any]]:
+    return [
+        config.model_dump() if hasattr(config, "model_dump") else dict(config)
+        for config in snapshot.configs
+    ]
+
+
 @router.post("/config")
 async def configure(payload: DeviceConfig, request: Request):
     sync_runtime_auth_from_fastapi_payload(runtime, request, payload)
@@ -41,7 +48,7 @@ async def configure(payload: DeviceConfig, request: Request):
 @router.post("/config/sync")
 async def sync_config(snapshot: RuntimeConfigSnapshot, request: Request):
     runtime.auth.sync_from_headers(request.headers, payload_container_id=snapshot.container_id)
-    typed_configs = validate_typed_configs(snapshot.configs, DeviceConfig)
+    typed_configs = validate_typed_configs(_snapshot_configs_as_payloads(snapshot), DeviceConfig)
     return await config_sync.apply_snapshot(
         snapshot=snapshot.model_copy(update={"configs": typed_configs}),
         active_config_ids=registry.ids(),
