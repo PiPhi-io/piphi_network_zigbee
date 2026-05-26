@@ -225,6 +225,7 @@ async def test_config_sync_accepts_core_snapshot_payloads() -> None:
 @pytest.mark.anyio
 async def test_apply_config_starts_subscription_and_ingests_state(monkeypatch) -> None:
     started: list["FakeSubscriber"] = []
+    telemetry_deliveries: list[dict] = []
 
     class FakeSubscriber:
         def __init__(self, *, server, subscriptions, on_payload):
@@ -255,6 +256,11 @@ async def test_apply_config_starts_subscription_and_ingests_state(monkeypatch) -
             return {"server": self.server, "status": self.status, "topics": self.topics}
 
     monkeypatch.setattr(runtime_state, "ZigbeeMqttSubscriber", FakeSubscriber)
+    monkeypatch.setattr(
+        runtime_state,
+        "schedule_telemetry_delivery",
+        lambda **kwargs: telemetry_deliveries.append(kwargs),
+    )
     await runtime_state.remove_config("test-kitchen-light")
     config_id = "subscribed-kitchen-light"
     await runtime_state.apply_config(
@@ -273,6 +279,13 @@ async def test_apply_config_starts_subscription_and_ingests_state(monkeypatch) -
     assert snapshot["state"]["brightness_percent"] == 100
     assert snapshot["state"]["availability"] is True
     assert runtime_state.mqtt_subscription_snapshot()["running"] is True
+    assert [delivery["device_id"] for delivery in telemetry_deliveries] == [
+        "subscribed_kitchen_light",
+        "subscribed_kitchen_light",
+    ]
+    assert telemetry_deliveries[0]["metrics"]["state"] is True
+    assert telemetry_deliveries[0]["metrics"]["brightness_percent"] == 100
+    assert telemetry_deliveries[1]["metrics"]["availability"] is True
 
     runtime_state.stop_mqtt_subscriptions()
     await runtime_state.remove_config(config_id)

@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import asyncio
+import logging
+import threading
 from typing import Any
 
 from fastapi import HTTPException
 
 from piphi_runtime_kit_python import (
+    RuntimeProcessState,
+    TelemetryClient,
     build_local_event_record,
     build_runtime_identity,
     create_runtime_starter,
+    dispatch_telemetry_delivery,
+    schedule_telemetry_delivery,
 )
 
 from .contract import CAPABILITIES, COMMANDS
@@ -36,6 +43,7 @@ capabilities = CAPABILITIES
 commands = COMMANDS
 mqtt_subscribers: dict[str, ZigbeeMqttSubscriber] = {}
 mqtt_subscription_errors: dict[str, str] = {}
+logger = logging.getLogger(__name__)
 
 
 def make_entry(config: DeviceConfig) -> dict[str, Any]:
@@ -216,3 +224,91 @@ def _handle_mqtt_payload(subscription: ZigbeeMqttSubscription, payload: dict[str
             "state": state_update,
         },
     )
+    deliver_state_telemetry(entry, subscription.device_id, state_update)
+
+
+def deliver_state_telemetry(
+    entry: dict[str, Any],
+    device_id: str,
+    state_update: dict[str, Any],
+) -> None:
+    metrics = _telemetry_metrics_from_state(state_update)
+    if not metrics:
+        return
+
+    container_id = str(entry.get("container_id") or "").strip() or None
+    resolved_device_id = str(device_id or entry.get("device_id") or entry.get("config_id") or "").strip()
+    if not resolved_device_id:
+        return
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        thread = threading.Thread(
+            target=_deliver_state_telemetry_from_thread,
+            kwargs={
+                "container_id": container_id,
+                "device_id": resolved_device_id,
+                "metrics": metrics,
+            },
+            daemon=True,
+        )
+        thread.start()
+        return
+
+    schedule_telemetry_delivery(
+        process_state=runtime.process_state,
+        telemetry_client=telemetry,
+        auth_context=runtime.auth,
+        device_id=resolved_device_id,
+        container_id=container_id,
+        metrics=metrics,
+        on_skipped=_log_telemetry_skipped,
+        on_error=_log_telemetry_error,
+    )
+
+
+def _telemetry_metrics_from_state(state_update: dict[str, Any]) -> dict[str, Any]:
+    return {
+        str(key): value
+        for key, value in state_update.items()
+        if isinstance(value, (bool, int, float, str))
+        and key not in {"mqtt_server", "mqtt_topic"}
+    }
+
+
+def _deliver_state_telemetry_from_thread(
+    *,
+    container_id: str | None,
+    device_id: str,
+    metrics: dict[str, Any],
+) -> None:
+    async def send() -> None:
+        isolated_client = TelemetryClient(
+            process_state=RuntimeProcessState(),
+            core_base_url=telemetry.core_base_url,
+            telemetry_path=telemetry.telemetry_path,
+            timeout_seconds=telemetry.timeout_seconds,
+        )
+        await dispatch_telemetry_delivery(
+            telemetry_client=isolated_client,
+            auth_context=runtime.auth,
+            device_id=device_id,
+            container_id=container_id,
+            metrics=metrics,
+            on_skipped=_log_telemetry_skipped,
+            on_error=_log_telemetry_error,
+        )
+
+    try:
+        asyncio.run(send())
+    except Exception as exc:
+        _log_telemetry_error(exc, {"device_id": device_id, "container_id": container_id})
+
+
+def _log_telemetry_skipped(reason: str, context: dict[str, Any]) -> None:
+    logger.debug("zigbee_telemetry_skipped reason=%s context=%s", reason, context)
+
+
+def _log_telemetry_error(exc: Exception, context: dict[str, Any]) -> None:
+    logger.warning("zigbee_telemetry_delivery_failed error=%s context=%s", exc, context)
