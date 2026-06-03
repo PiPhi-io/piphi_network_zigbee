@@ -4,7 +4,7 @@ import os
 
 INTEGRATION_ID = "piphi-network-zigbee"
 INTEGRATION_NAME = "PiPhi Network Zigbee"
-INTEGRATION_VERSION = "0.1.0"
+INTEGRATION_VERSION = "0.1.3"
 PROJECT_KIND = "integration"
 PROJECT_PRESET = "protocol-bridge"
 PROJECT_DOMAIN = "bridge"
