@@ -227,6 +227,43 @@ async def test_config_sync_accepts_core_snapshot_payloads() -> None:
 
 
 @pytest.mark.anyio
+async def test_config_sync_prefers_physical_zigbee_identity_over_uuid_device_id() -> None:
+    config_id = "uuid-motion-sensor"
+    await runtime_state.remove_config(config_id)
+    runtime_state.runtime.set_current_generation(None)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/config/sync",
+            json={
+                "container_id": "runtime-1",
+                "generation": 12346,
+                "configs": [
+                    {
+                        "id": config_id,
+                        "container_id": "runtime-1",
+                        "device_id": "15201897-88fa-4ab4-9fd8-f689cf0c402b",
+                        "friendly_name": "Motion Sensor 1 In Bedroom",
+                        "ieee_address": "0xb40e060fffe7068b",
+                        "mqtt_server": "mqtt://broker.local:1883",
+                        "mqtt_base_topic": "zigbee2mqtt",
+                        "mqtt_topic": "zigbee2mqtt/0xb40e060fffe7068b",
+                        "capabilities": ["occupancy"],
+                    },
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    entry = runtime_state.registry.get(config_id)
+    assert entry["device_id"] == "0xb40e060fffe7068b"
+
+    await runtime_state.remove_config(config_id)
+    runtime_state.runtime.set_current_generation(None)
+
+
+@pytest.mark.anyio
 async def test_apply_config_starts_subscription_and_ingests_state(monkeypatch) -> None:
     started: list["FakeSubscriber"] = []
     telemetry_deliveries: list[dict] = []

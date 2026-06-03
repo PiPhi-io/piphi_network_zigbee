@@ -4,6 +4,7 @@ import asyncio
 import logging
 import threading
 from typing import Any
+from uuid import UUID
 
 from fastapi import HTTPException
 
@@ -48,7 +49,7 @@ logger = logging.getLogger(__name__)
 
 def make_entry(config: DeviceConfig) -> dict[str, Any]:
     identity = build_runtime_identity(config, integration_id=INTEGRATION_ID)
-    device_id = config.device_id or normalize_device_id(config.ieee_address or config.friendly_name)
+    device_id = _resolve_zigbee_device_id(config)
     config_id = config.config_id or config.id
     capabilities = config.capabilities or infer_capabilities(config.definition)
     mqtt_base_topic = config.mqtt_base_topic or DEFAULT_MQTT_BASE_TOPIC
@@ -76,6 +77,22 @@ def make_entry(config: DeviceConfig) -> dict[str, Any]:
         "definition": config.definition,
         "config": config.model_dump(),
     }
+
+
+def _resolve_zigbee_device_id(config: DeviceConfig) -> str:
+    configured_device_id = str(config.device_id or "").strip()
+    physical_device_id = normalize_device_id(config.ieee_address or config.friendly_name)
+    if configured_device_id and not (_looks_like_uuid(configured_device_id) and physical_device_id):
+        return configured_device_id
+    return physical_device_id or configured_device_id
+
+
+def _looks_like_uuid(value: Any) -> bool:
+    try:
+        UUID(str(value or "").strip())
+    except (TypeError, ValueError):
+        return False
+    return True
 
 
 def append_runtime_event(

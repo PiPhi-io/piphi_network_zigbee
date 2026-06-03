@@ -3,7 +3,7 @@
   "manifest_version": "1.0",
   "id": "piphi-network-zigbee",
   "name": "PiPhi Network Zigbee",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Generic Zigbee integration runtime backed by the shared Zigbee2MQTT sidecar.",
   "metadata": {
     "generator": "piphi-network-create",
@@ -17,7 +17,7 @@
     "website": "https://piphi.io"
   },
   "license": "Apache-2.0",
-  "image": "piphinetwork/zigbee-integration:0.1.3",
+  "image": "piphinetwork/zigbee-integration:0.1.4",
   "platforms": [
     "linux",
     "windows",
@@ -27,7 +27,7 @@
     "linux": {
       "type": "container",
       "container": {
-        "image": "piphinetwork/zigbee-integration:0.1.3",
+        "image": "piphinetwork/zigbee-integration:0.1.4",
         "ports": [
           {
             "container": 8730,
