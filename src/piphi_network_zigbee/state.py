@@ -52,6 +52,7 @@ def make_entry(config: DeviceConfig) -> dict[str, Any]:
     config_id = config.config_id or config.id
     capabilities = config.capabilities or infer_capabilities(config.definition)
     mqtt_base_topic = config.mqtt_base_topic or DEFAULT_MQTT_BASE_TOPIC
+    mqtt_topic = config.mqtt_topic or f"{mqtt_base_topic.strip('/')}/{config.friendly_name}"
     exposes = config.exposes or normalize_exposes(config.definition)
     capability_metadata = config.capability_metadata or capability_metadata_from_exposes(exposes)
     return {
@@ -67,7 +68,7 @@ def make_entry(config: DeviceConfig) -> dict[str, Any]:
         "device_type": config.device_type,
         "mqtt_server": config.mqtt_server or DEFAULT_MQTT_SERVER,
         "mqtt_base_topic": mqtt_base_topic,
-        "mqtt_topic": f"{mqtt_base_topic.strip('/')}/{config.friendly_name}",
+        "mqtt_topic": mqtt_topic,
         "sidecar_base_url": config.sidecar_base_url,
         "capabilities": capabilities,
         "capability_metadata": capability_metadata,

@@ -199,11 +199,13 @@ async def test_config_sync_accepts_core_snapshot_payloads() -> None:
                     {
                         "id": config_id,
                         "container_id": "runtime-1",
-                        "friendly_name": "0xb40e060fffe7068b",
+                        "device_id": "0xb40e060fffe7068b",
+                        "friendly_name": "Motion Sensor 1 In Bedroom",
                         "ieee_address": "0xb40e060fffe7068b",
                         "alias": "Third Reality Wireless motion sensor",
                         "mqtt_server": "mqtt://broker.local:1883",
                         "mqtt_base_topic": "zigbee2mqtt",
+                        "mqtt_topic": "zigbee2mqtt/0xb40e060fffe7068b",
                         "capabilities": ["occupancy"],
                     },
                 ],
@@ -217,6 +219,8 @@ async def test_config_sync_accepts_core_snapshot_payloads() -> None:
     assert payload["applied"] == [config_id]
     assert runtime_state.config_sync.get_current_generation() == 12345
     assert runtime_state.registry.get(config_id)["alias"] == "Third Reality Wireless motion sensor"
+    assert runtime_state.registry.get(config_id)["device_id"] == "0xb40e060fffe7068b"
+    assert runtime_state.registry.get(config_id)["mqtt_topic"] == "zigbee2mqtt/0xb40e060fffe7068b"
 
     await runtime_state.remove_config(config_id)
     runtime_state.runtime.set_current_generation(None)
@@ -266,22 +270,24 @@ async def test_apply_config_starts_subscription_and_ingests_state(monkeypatch) -
     await runtime_state.apply_config(
         DeviceConfig(
             id=config_id,
-            friendly_name="subscribed_kitchen_light",
+            device_id="0xb40e060fffe7068b",
+            friendly_name="Motion Sensor 1 In Bedroom",
             mqtt_server="mqtt://broker.local:1883",
+            mqtt_topic="zigbee2mqtt/0xb40e060fffe7068b",
             capabilities=["state", "brightness_percent"],
         )
     )
 
     snapshot = runtime_state.registry.state_snapshots[config_id]
-    assert "zigbee2mqtt/subscribed_kitchen_light" in started[0].topics
-    assert "zigbee2mqtt/subscribed_kitchen_light/availability" in started[0].topics
+    assert "zigbee2mqtt/0xb40e060fffe7068b" in started[0].topics
+    assert "zigbee2mqtt/0xb40e060fffe7068b/availability" in started[0].topics
     assert snapshot["state"]["state"] is True
     assert snapshot["state"]["brightness_percent"] == 100
     assert snapshot["state"]["availability"] is True
     assert runtime_state.mqtt_subscription_snapshot()["running"] is True
     assert [delivery["device_id"] for delivery in telemetry_deliveries] == [
-        "subscribed_kitchen_light",
-        "subscribed_kitchen_light",
+        "0xb40e060fffe7068b",
+        "0xb40e060fffe7068b",
     ]
     assert telemetry_deliveries[0]["metrics"]["state"] is True
     assert telemetry_deliveries[0]["metrics"]["brightness_percent"] == 100

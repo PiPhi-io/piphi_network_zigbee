@@ -15,6 +15,7 @@ class DeviceConfig(RuntimeConfig):
     description: str | None = None
     device_type: str | None = None
     mqtt_server: str | None = None
+    mqtt_topic: str | None = None
     mqtt_base_topic: str = "zigbee2mqtt"
     sidecar_base_url: str | None = None
     capabilities: list[str] = Field(default_factory=list)
@@ -40,4 +41,10 @@ class DeviceConfig(RuntimeConfig):
     @classmethod
     def normalize_mqtt_server(cls, value: str | None) -> str | None:
         token = str(value or "").strip()
+        return token or None
+
+    @field_validator("mqtt_topic")
+    @classmethod
+    def normalize_mqtt_topic(cls, value: str | None) -> str | None:
+        token = str(value or "").strip().strip("/")
         return token or None
