@@ -184,7 +184,9 @@ async def test_command_route_publishes_zigbee2mqtt_dry_run() -> None:
 
 @pytest.mark.anyio
 async def test_config_sync_accepts_core_snapshot_payloads() -> None:
+    source_id = "snapshot-motion-sensor-source"
     config_id = "snapshot-motion-sensor"
+    await runtime_state.remove_config(source_id)
     await runtime_state.remove_config(config_id)
     runtime_state.runtime.set_current_generation(None)
 
@@ -197,7 +199,8 @@ async def test_config_sync_accepts_core_snapshot_payloads() -> None:
                 "generation": 12345,
                 "configs": [
                     {
-                        "id": config_id,
+                        "id": source_id,
+                        "config_id": config_id,
                         "container_id": "runtime-1",
                         "device_id": "0xb40e060fffe7068b",
                         "friendly_name": "Motion Sensor 1 In Bedroom",
@@ -217,11 +220,14 @@ async def test_config_sync_accepts_core_snapshot_payloads() -> None:
     assert payload["status"] == "synced"
     assert payload["generation"] == 12345
     assert payload["applied"] == [config_id]
+    assert payload["active_config_ids"] == [config_id]
     assert runtime_state.config_sync.get_current_generation() == 12345
+    assert runtime_state.registry.get(source_id) is None
     assert runtime_state.registry.get(config_id)["alias"] == "Third Reality Wireless motion sensor"
     assert runtime_state.registry.get(config_id)["device_id"] == "0xb40e060fffe7068b"
     assert runtime_state.registry.get(config_id)["mqtt_topic"] == "zigbee2mqtt/0xb40e060fffe7068b"
 
+    await runtime_state.remove_config(source_id)
     await runtime_state.remove_config(config_id)
     runtime_state.runtime.set_current_generation(None)
 
@@ -303,10 +309,12 @@ async def test_apply_config_starts_subscription_and_ingests_state(monkeypatch) -
         lambda **kwargs: telemetry_deliveries.append(kwargs),
     )
     await runtime_state.remove_config("test-kitchen-light")
+    source_id = "subscribed-kitchen-source"
     config_id = "subscribed-kitchen-light"
     await runtime_state.apply_config(
         DeviceConfig(
-            id=config_id,
+            id=source_id,
+            config_id=config_id,
             device_id="0xb40e060fffe7068b",
             friendly_name="Motion Sensor 1 In Bedroom",
             mqtt_server="mqtt://broker.local:1883",
@@ -315,6 +323,7 @@ async def test_apply_config_starts_subscription_and_ingests_state(monkeypatch) -
         )
     )
 
+    assert runtime_state.registry.get(source_id) is None
     snapshot = runtime_state.registry.state_snapshots[config_id]
     assert "zigbee2mqtt/0xb40e060fffe7068b" in started[0].topics
     assert "zigbee2mqtt/0xb40e060fffe7068b/availability" in started[0].topics
@@ -326,9 +335,14 @@ async def test_apply_config_starts_subscription_and_ingests_state(monkeypatch) -
         "0xb40e060fffe7068b",
         "0xb40e060fffe7068b",
     ]
+    assert [delivery["config_id"] for delivery in telemetry_deliveries] == [
+        config_id,
+        config_id,
+    ]
     assert telemetry_deliveries[0]["metrics"]["state"] is True
     assert telemetry_deliveries[0]["metrics"]["brightness_percent"] == 100
     assert telemetry_deliveries[1]["metrics"]["availability"] is True
 
     runtime_state.stop_mqtt_subscriptions()
+    await runtime_state.remove_config(source_id)
     await runtime_state.remove_config(config_id)

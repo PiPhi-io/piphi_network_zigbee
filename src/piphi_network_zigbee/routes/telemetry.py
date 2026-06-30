@@ -20,6 +20,7 @@ async def telemetry_example(request: Request):
         telemetry_client=telemetry,
         auth_context=runtime.auth,
         device_id=str(entry["device_id"]),
+        config_id=str(entry["config_id"]),
         container_id=entry.get("container_id"),
         metrics={"connected": True, "temperature_c": 21.4},
         units={"temperature_c": "C"},
@@ -36,6 +37,7 @@ async def telemetry_for_device(config_id: str, request: Request):
         telemetry_client=telemetry,
         auth_context=runtime.auth,
         device_id=str(entry["device_id"]),
+        config_id=str(entry["config_id"]),
         container_id=entry.get("container_id"),
         metrics={
             "connected": True,

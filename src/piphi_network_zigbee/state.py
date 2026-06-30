@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 def make_entry(config: DeviceConfig) -> dict[str, Any]:
     identity = build_runtime_identity(config, integration_id=INTEGRATION_ID)
     device_id = _resolve_zigbee_device_id(config)
-    config_id = config.config_id or config.id
+    config_id = _entry_id_for_config(config)
     capabilities = config.capabilities or infer_capabilities(config.definition)
     mqtt_base_topic = config.mqtt_base_topic or DEFAULT_MQTT_BASE_TOPIC
     mqtt_topic = config.mqtt_topic or f"{mqtt_base_topic.strip('/')}/{config.friendly_name}"
@@ -95,6 +95,10 @@ def _looks_like_uuid(value: Any) -> bool:
     return True
 
 
+def _entry_id_for_config(config: DeviceConfig) -> str:
+    return str(config.config_id or config.id).strip()
+
+
 def append_runtime_event(
     event_type: str,
     device: dict[str, Any],
@@ -120,9 +124,12 @@ def get_entry_or_404(config_id: str) -> dict[str, Any]:
 
 async def apply_config(config: DeviceConfig) -> None:
     entry = make_entry(config)
-    registry.set(config.id, entry)
+    entry_id = _entry_id_for_config(config)
+    if config.id != entry_id:
+        registry.remove(config.id)
+    registry.set(entry_id, entry)
     registry.update_state(
-        config.id,
+        entry_id,
         {
             "connected": True,
             "availability": True,
@@ -255,6 +262,7 @@ def deliver_state_telemetry(
         return
 
     container_id = str(entry.get("container_id") or "").strip() or None
+    config_id = str(entry.get("config_id") or "").strip() or None
     resolved_device_id = str(device_id or entry.get("device_id") or entry.get("config_id") or "").strip()
     if not resolved_device_id:
         return
@@ -266,6 +274,7 @@ def deliver_state_telemetry(
             target=_deliver_state_telemetry_from_thread,
             kwargs={
                 "container_id": container_id,
+                "config_id": config_id,
                 "device_id": resolved_device_id,
                 "metrics": metrics,
             },
@@ -279,6 +288,7 @@ def deliver_state_telemetry(
         telemetry_client=telemetry,
         auth_context=runtime.auth,
         device_id=resolved_device_id,
+        config_id=config_id,
         container_id=container_id,
         metrics=metrics,
         on_skipped=_log_telemetry_skipped,
@@ -298,6 +308,7 @@ def _telemetry_metrics_from_state(state_update: dict[str, Any]) -> dict[str, Any
 def _deliver_state_telemetry_from_thread(
     *,
     container_id: str | None,
+    config_id: str | None,
     device_id: str,
     metrics: dict[str, Any],
 ) -> None:
@@ -312,6 +323,7 @@ def _deliver_state_telemetry_from_thread(
             telemetry_client=isolated_client,
             auth_context=runtime.auth,
             device_id=device_id,
+            config_id=config_id,
             container_id=container_id,
             metrics=metrics,
             on_skipped=_log_telemetry_skipped,
