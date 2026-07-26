@@ -1709,5 +1709,105 @@
         ]
       }
     }
-  ]
+  ],
+  "telemetry": {
+    "capabilityMappings": [
+      {
+        "nativeMetric": "availability",
+        "capability": "sensor.availability"
+      },
+      {
+        "nativeMetric": "battery_low",
+        "capability": "sensor.battery_low"
+      },
+      {
+        "nativeMetric": "battery_percent",
+        "capability": "sensor.battery_percent"
+      },
+      {
+        "nativeMetric": "brightness_percent",
+        "capability": "sensor.brightness_percent"
+      },
+      {
+        "nativeMetric": "carbon_monoxide",
+        "capability": "sensor.carbon_monoxide"
+      },
+      {
+        "nativeMetric": "color_temperature_mired",
+        "capability": "sensor.color_temperature_mired"
+      },
+      {
+        "nativeMetric": "connected",
+        "capability": "sensor.connected"
+      },
+      {
+        "nativeMetric": "contact_open",
+        "capability": "sensor.contact_open"
+      },
+      {
+        "nativeMetric": "current_a",
+        "capability": "sensor.current_a"
+      },
+      {
+        "nativeMetric": "energy_kwh",
+        "capability": "sensor.energy_kwh"
+      },
+      {
+        "nativeMetric": "gas",
+        "capability": "sensor.gas"
+      },
+      {
+        "nativeMetric": "humidity_percent",
+        "capability": "sensor.humidity_percent"
+      },
+      {
+        "nativeMetric": "illuminance_lux",
+        "capability": "sensor.illuminance_lux"
+      },
+      {
+        "nativeMetric": "linkquality",
+        "capability": "sensor.linkquality"
+      },
+      {
+        "nativeMetric": "occupancy",
+        "capability": "sensor.occupancy"
+      },
+      {
+        "nativeMetric": "position_percent",
+        "capability": "sensor.position_percent"
+      },
+      {
+        "nativeMetric": "power_w",
+        "capability": "sensor.power_w"
+      },
+      {
+        "nativeMetric": "pressure_hpa",
+        "capability": "sensor.pressure_hpa"
+      },
+      {
+        "nativeMetric": "smoke",
+        "capability": "sensor.smoke"
+      },
+      {
+        "nativeMetric": "state",
+        "capability": "sensor.state"
+      },
+      {
+        "nativeMetric": "tamper",
+        "capability": "sensor.tamper"
+      },
+      {
+        "nativeMetric": "temperature_c",
+        "capability": "sensor.temperature_c"
+      },
+      {
+        "nativeMetric": "voltage_v",
+        "capability": "sensor.voltage_v"
+      },
+      {
+        "nativeMetric": "water_leak",
+        "capability": "sensor.water_leak"
+      }
+    ]
+  }
 }
