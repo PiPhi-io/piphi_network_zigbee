@@ -145,7 +145,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add manifest.json
+          git add src/manifest.json
           for file in pyproject.toml package.json go.mod; do
             if [[ -f "$file" ]]; then
               git add "$file"

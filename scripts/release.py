@@ -85,7 +85,7 @@ def parse_args() -> argparse.Namespace:
     mode.add_argument("--set-version", help="Set an explicit semantic version.")
     parser.add_argument("--preid", choices=PREID_CHOICES, default=DEFAULT_PREID)
     parser.add_argument("--repo-root", default=None)
-    parser.add_argument("--manifest", default="manifest.json")
+    parser.add_argument("--manifest", default="src/manifest.json")
     parser.add_argument("--pyproject", default="pyproject.toml")
     parser.add_argument("--package-json", default="package.json")
     parser.add_argument("--docker-image", default=None)

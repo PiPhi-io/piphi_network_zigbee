@@ -6,7 +6,7 @@ from pathlib import Path
 from piphi_network_zigbee.contract import COMMANDS, ENDPOINTS, REQUIRED_ENDPOINTS
 
 ROOT = Path(__file__).resolve().parents[1]
-manifest = json.loads((ROOT / "manifest.json").read_text())
+manifest = json.loads((ROOT / "src" / "manifest.json").read_text())
 behavior_path = ROOT / "src" / "behaviors.json"
 if not behavior_path.exists():
     behavior_path = ROOT / "behaviors.json"
