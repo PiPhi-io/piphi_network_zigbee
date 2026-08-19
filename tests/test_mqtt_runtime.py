@@ -15,6 +15,7 @@ from piphi_network_zigbee.mqtt_runtime import (
     normalize_state_payload,
 )
 from piphi_network_zigbee.schemas import DeviceConfig
+from piphi_network_zigbee.routes import commands as command_routes
 
 
 class FakeMqttModule:
@@ -180,6 +181,67 @@ async def test_command_route_publishes_zigbee2mqtt_dry_run() -> None:
     assert command["mqtt"]["payload"] == {"state": "ON"}
 
     await runtime_state.remove_config("test-kitchen-light")
+
+
+@pytest.mark.anyio
+async def test_command_route_replays_key_without_repeating_mqtt_effect(
+    monkeypatch,
+) -> None:
+    published: list[tuple[str, dict[str, object], bool]] = []
+
+    class FakePublishingClient:
+        def __init__(self, *, server: str) -> None:
+            self.server = server
+
+        async def publish_json(
+            self,
+            topic: str,
+            payload: dict[str, object],
+            *,
+            dry_run: bool = False,
+        ) -> dict[str, object]:
+            published.append((topic, payload, dry_run))
+            return {
+                "ok": True,
+                "status": "published",
+                "topic": topic,
+                "payload": payload,
+            }
+
+    monkeypatch.setattr(command_routes, "ZigbeeMqttClient", FakePublishingClient)
+    runtime_state.registry.set(
+        "idempotent-light",
+        {
+            "device_id": "idempotent-light",
+            "config_id": "idempotent-light",
+            "mqtt_server": "mqtt://broker.local:1883",
+            "mqtt_topic": "zigbee2mqtt/idempotent-light",
+            "capabilities": ["state", "refresh"],
+        },
+    )
+    headers = {"X-PiPhi-Idempotency-Key": "zigbee-action-idempotency-1"}
+    payload = {
+        "command": "set_state",
+        "config_id": "idempotent-light",
+        "device_id": "idempotent-light",
+        "args": {"on": True},
+    }
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        first = await client.post("/command", json=payload, headers=headers)
+        replay = await client.post("/command", json=payload, headers=headers)
+
+    assert first.status_code == 200
+    assert replay.status_code == 200
+    assert first.json()["replayed"] is False
+    assert replay.json()["replayed"] is True
+    assert published == [
+        ("zigbee2mqtt/idempotent-light/set", {"state": "ON"}, False)
+    ]
+    await runtime_state.remove_config("idempotent-light")
 
 
 @pytest.mark.anyio
