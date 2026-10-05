@@ -9,12 +9,15 @@ from uuid import UUID
 from fastapi import HTTPException
 
 from piphi_runtime_kit_python import (
+    EventClient,
     RuntimeProcessState,
     TelemetryClient,
     build_local_event_record,
     build_runtime_identity,
     create_runtime_starter,
+    dispatch_event_delivery,
     dispatch_telemetry_delivery,
+    schedule_event_delivery,
     schedule_telemetry_delivery,
 )
 
@@ -38,6 +41,7 @@ starter = create_runtime_starter(
 runtime = starter.runtime
 registry = starter.registry
 telemetry = starter.telemetry_client
+event_client = starter.event_client
 config_sync = starter.config_sync
 
 capabilities = CAPABILITIES
@@ -103,16 +107,140 @@ def append_runtime_event(
     event_type: str,
     device: dict[str, Any],
     payload: dict[str, Any] | None = None,
+    severity: str = "info",
 ) -> dict[str, Any]:
     event = build_local_event_record(
         event_type=event_type,
         device=device,
         payload=payload or {},
         source=INTEGRATION_ID,
-        severity="info",
+        severity=severity,
     )
     registry.append_event(event)
     return event
+
+
+def emit_security_transition_events(
+    entry: dict[str, Any],
+    previous_state: dict[str, Any],
+    state_update: dict[str, Any],
+) -> None:
+    for capability, event_types, severity in (
+        (
+            "smoke",
+            ("zigbee.safety.smoke.detected", "zigbee.safety.smoke.cleared"),
+            "critical",
+        ),
+        (
+            "carbon_monoxide",
+            (
+                "zigbee.safety.carbon_monoxide.detected",
+                "zigbee.safety.carbon_monoxide.cleared",
+            ),
+            "critical",
+        ),
+        (
+            "water_leak",
+            ("zigbee.safety.leak.detected", "zigbee.safety.leak.cleared"),
+            "warning",
+        ),
+    ):
+        if capability not in previous_state or capability not in state_update:
+            continue
+        previous_value = previous_state.get(capability)
+        current_value = state_update.get(capability)
+        if (
+            previous_value == current_value
+            or not isinstance(previous_value, bool)
+            or not isinstance(current_value, bool)
+        ):
+            continue
+        _deliver_security_event(
+            entry=entry,
+            event_type=event_types[0] if current_value else event_types[1],
+            payload={
+                "capability": capability,
+                "previous_value": previous_value,
+                "current_value": current_value,
+            },
+            severity=severity,
+        )
+
+
+def _deliver_security_event(
+    *,
+    entry: dict[str, Any],
+    event_type: str,
+    payload: dict[str, Any],
+    severity: str,
+) -> None:
+    append_runtime_event(event_type, entry, payload, severity)
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        threading.Thread(
+            target=_deliver_security_event_from_thread,
+            kwargs={
+                "entry": dict(entry),
+                "event_type": event_type,
+                "payload": dict(payload),
+                "severity": severity,
+            },
+            daemon=True,
+        ).start()
+        return
+    schedule_event_delivery(
+        process_state=runtime.process_state,
+        event_client=event_client,
+        auth_context=runtime.auth,
+        event_type=event_type,
+        device=entry,
+        payload=payload,
+        source=INTEGRATION_ID,
+        severity=severity,
+        on_skipped=_log_event_skipped,
+        on_error=_log_event_error,
+    )
+
+
+def _deliver_security_event_from_thread(
+    *,
+    entry: dict[str, Any],
+    event_type: str,
+    payload: dict[str, Any],
+    severity: str,
+) -> None:
+    async def send() -> None:
+        isolated_client = EventClient(
+            process_state=RuntimeProcessState(),
+            core_base_url=event_client.core_base_url,
+            events_ingest_path=event_client.events_ingest_path,
+            timeout_seconds=event_client.timeout_seconds,
+        )
+        await dispatch_event_delivery(
+            event_client=isolated_client,
+            auth_context=runtime.auth,
+            event_type=event_type,
+            device=entry,
+            payload=payload,
+            source=INTEGRATION_ID,
+            severity=severity,
+            on_skipped=_log_event_skipped,
+            on_error=_log_event_error,
+        )
+
+    try:
+        asyncio.run(send())
+    except Exception as exc:
+        _log_event_error(exc, {"event_type": event_type})
+
+
+def _log_event_skipped(reason: str, context: dict[str, Any]) -> None:
+    logger.debug("zigbee_event_skipped reason=%s context=%s", reason, context)
+
+
+def _log_event_error(exc: Exception, context: dict[str, Any]) -> None:
+    logger.warning("zigbee_event_delivery_failed error=%s context=%s", exc, context)
 
 
 def get_entry_or_404(config_id: str) -> dict[str, Any]:
@@ -230,6 +358,7 @@ def _handle_mqtt_payload(subscription: ZigbeeMqttSubscription, payload: dict[str
     current_state = current_snapshot.get("state") if isinstance(current_snapshot, dict) else {}
     if not isinstance(current_state, dict):
         current_state = {}
+    emit_security_transition_events(entry, current_state, state_update)
     registry.update_state(
         subscription.config_id,
         {
