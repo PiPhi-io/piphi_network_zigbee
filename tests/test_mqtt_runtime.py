@@ -10,12 +10,118 @@ from piphi_network_zigbee import state as runtime_state
 from piphi_network_zigbee.main import app
 from piphi_network_zigbee.mqtt_runtime import (
     ZigbeeMqttClient,
+    ZigbeeMqttSubscription,
     command_to_mqtt,
     decode_zigbee2mqtt_message,
     normalize_state_payload,
 )
 from piphi_network_zigbee.schemas import DeviceConfig
 from piphi_network_zigbee.routes import commands as command_routes
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("capability", "detected_event", "cleared_event", "severity"),
+    (
+        (
+            "smoke",
+            "zigbee.safety.smoke.detected",
+            "zigbee.safety.smoke.cleared",
+            "critical",
+        ),
+        (
+            "carbon_monoxide",
+            "zigbee.safety.carbon_monoxide.detected",
+            "zigbee.safety.carbon_monoxide.cleared",
+            "critical",
+        ),
+        (
+            "water_leak",
+            "zigbee.safety.leak.detected",
+            "zigbee.safety.leak.cleared",
+            "warning",
+        ),
+    ),
+)
+async def test_security_events_require_a_real_transition_and_deliver_to_core(
+    monkeypatch,
+    capability,
+    detected_event,
+    cleared_event,
+    severity,
+) -> None:
+    config_id = f"security-{capability}"
+    device_id = f"zigbee-{capability}"
+    entry = {
+        "config_id": config_id,
+        "device_id": device_id,
+        "integration_id": "piphi-network-zigbee",
+    }
+    subscription = ZigbeeMqttSubscription(
+        topic=f"zigbee2mqtt/{device_id}",
+        config_id=config_id,
+        device_id=device_id,
+    )
+    deliveries: list[dict] = []
+    monkeypatch.setattr(runtime_state, "schedule_event_delivery", lambda **kwargs: deliveries.append(kwargs))
+    monkeypatch.setattr(runtime_state, "schedule_telemetry_delivery", lambda **kwargs: None)
+    runtime_state.registry.set(config_id, entry)
+
+    try:
+        runtime_state._handle_mqtt_payload(subscription, {capability: False})
+        runtime_state._handle_mqtt_payload(subscription, {capability: False})
+        assert deliveries == []
+
+        runtime_state._handle_mqtt_payload(subscription, {capability: True})
+        runtime_state._handle_mqtt_payload(subscription, {capability: True})
+        runtime_state._handle_mqtt_payload(subscription, {capability: False})
+
+        assert [delivery["event_type"] for delivery in deliveries] == [
+            detected_event,
+            cleared_event,
+        ]
+        assert all(delivery["severity"] == severity for delivery in deliveries)
+        assert all(delivery["device"]["device_id"] == device_id for delivery in deliveries)
+        assert deliveries[0]["payload"] == {
+            "capability": capability,
+            "previous_value": False,
+            "current_value": True,
+        }
+    finally:
+        runtime_state.registry.remove(config_id)
+
+
+def test_security_event_worker_delivers_from_an_mqtt_callback_thread(monkeypatch) -> None:
+    deliveries: list[dict] = []
+
+    async def fake_dispatch_event_delivery(**kwargs):
+        deliveries.append(kwargs)
+        return True
+
+    monkeypatch.setattr(
+        runtime_state,
+        "dispatch_event_delivery",
+        fake_dispatch_event_delivery,
+    )
+    runtime_state._deliver_security_event_from_thread(
+        entry={
+            "config_id": "threaded-smoke",
+            "device_id": "zigbee-threaded-smoke",
+            "integration_id": "piphi-network-zigbee",
+        },
+        event_type="zigbee.safety.smoke.detected",
+        payload={
+            "capability": "smoke",
+            "previous_value": False,
+            "current_value": True,
+        },
+        severity="critical",
+    )
+
+    assert len(deliveries) == 1
+    assert deliveries[0]["event_type"] == "zigbee.safety.smoke.detected"
+    assert deliveries[0]["severity"] == "critical"
+    assert deliveries[0]["event_client"] is not runtime_state.event_client
 
 
 class FakeMqttModule:
