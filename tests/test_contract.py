@@ -5,6 +5,7 @@ from pathlib import Path
 
 from piphi_network_zigbee.contract import COMMANDS, REQUIRED_ENDPOINTS
 from piphi_network_zigbee.main import app
+from piphi_network_zigbee.settings import INTEGRATION_VERSION
 
 
 def test_runtime_implements_contract_routes() -> None:
@@ -37,6 +38,7 @@ def test_manifest_declares_fail_closed_security_coverage() -> None:
     manifest = json.loads(
         (Path(__file__).resolve().parents[1] / "src" / "manifest.json").read_text()
     )
+    assert INTEGRATION_VERSION == manifest["version"]
     mappings = manifest["security"]["event_mappings"]
 
     assert manifest["security"]["contract_version"] == "1"

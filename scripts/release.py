@@ -18,6 +18,7 @@ SEMVER_RE = re.compile(
 )
 PYPROJECT_VERSION_RE = re.compile(r'(?m)^(version\s*=\s*")([^"]+)(")$')
 PACKAGE_VERSION_RE = re.compile(r'(?m)^\s*"version"\s*:\s*"([^"]+)"')
+SETTINGS_VERSION_RE = re.compile(r'(?m)^(INTEGRATION_VERSION\s*=\s*")([^"]+)(")$')
 DEFAULT_PREID = "alpha"
 BUMP_CHOICES = (
     "major",
@@ -88,6 +89,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest", default="src/manifest.json")
     parser.add_argument("--pyproject", default="pyproject.toml")
     parser.add_argument("--package-json", default="package.json")
+    parser.add_argument("--settings", default="src/piphi_network_zigbee/settings.py")
     parser.add_argument("--docker-image", default=None)
     parser.add_argument("--no-pin-container-image", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
@@ -129,6 +131,21 @@ def write_version_file(path: Path, text: str, version: str) -> None:
         payload = json.loads(text)
         payload["version"] = version
         path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def read_settings_version(path: Path) -> tuple[str, SemVer]:
+    text = path.read_text(encoding="utf-8")
+    match = SETTINGS_VERSION_RE.search(text)
+    if match is None:
+        raise ValueError("Unable to find INTEGRATION_VERSION in settings.py")
+    return text, SemVer.parse(match.group(2))
+
+
+def write_settings_version(path: Path, text: str, version: str) -> None:
+    updated, count = SETTINGS_VERSION_RE.subn(rf'\g<1>{version}\g<3>', text, count=1)
+    if count != 1:
+        raise ValueError("Unable to update INTEGRATION_VERSION in settings.py")
+    path.write_text(updated, encoding="utf-8")
 
 
 def resolve_target_version(current: SemVer, *, bump: str | None, set_version: str | None, preid: str) -> SemVer:
@@ -249,12 +266,26 @@ def update_primary_container_images(manifest: dict, *, docker_image: str, versio
             container["image"] = tagged_image
 
 
+def update_experience_package_version(repo_root: Path, version: str) -> Path | None:
+    package_path = repo_root / "experiences" / "devices" / "package.source.json"
+    if not package_path.exists():
+        return None
+    package = json.loads(package_path.read_text(encoding="utf-8"))
+    identity = package.get("identity")
+    if not isinstance(identity, dict) or not isinstance(identity.get("version"), str):
+        raise ValueError("Experience package identity.version is missing")
+    identity["version"] = version
+    package_path.write_text(json.dumps(package, indent=2) + "\n", encoding="utf-8")
+    return package_path
+
+
 def main() -> int:
     args = parse_args()
     repo_root = resolve_repo_root(args.repo_root)
     manifest_path = resolve_path(repo_root, args.manifest)
     pyproject_path = resolve_path(repo_root, args.pyproject)
     package_path = resolve_path(repo_root, args.package_json)
+    settings_path = resolve_path(repo_root, args.settings)
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     manifest_version = SemVer.parse(str(manifest.get("version") or "").strip())
@@ -269,6 +300,11 @@ def main() -> int:
     for path, (_text, version) in version_files:
         if version.compare(manifest_version) != 0:
             raise ValueError(f"Version mismatch: {path.name}={version} manifest.json={manifest_version}")
+    settings_text, settings_version = read_settings_version(settings_path)
+    if settings_version.compare(manifest_version) != 0:
+        raise ValueError(
+            f"Version mismatch: settings.py={settings_version} manifest.json={manifest_version}"
+        )
 
     target = resolve_target_version(manifest_version, bump=args.bump, set_version=args.set_version, preid=args.preid)
     target_version = str(target)
@@ -286,6 +322,8 @@ def main() -> int:
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     for path, (text, _version) in version_files:
         write_version_file(path, text, target_version)
+    write_settings_version(settings_path, settings_text, target_version)
+    update_experience_package_version(repo_root, target_version)
     print(target_version)
     return 0
 
