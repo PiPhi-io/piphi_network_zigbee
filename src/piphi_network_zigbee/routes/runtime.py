@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from ..contract import ENDPOINTS, REQUIRED_ENDPOINTS
 from ..mqtt_runtime import ZigbeeMqttClient, ZigbeeMqttError, normalize_state_payload
@@ -14,16 +14,25 @@ from ..settings import (
     PROJECT_KIND,
     PROJECT_PRESET,
 )
-from ..state import mqtt_subscription_snapshot, registry
+from ..state import mqtt_subscription_snapshot, registry, starter
 
 router = APIRouter(tags=["runtime"])
 
 
 @router.get("/state")
-async def state(refresh: bool = False, dry_run: bool = False) -> dict[str, Any]:
-    if refresh:
-        await _refresh_mqtt_state(dry_run=dry_run)
+async def state(
+    refresh: bool = Query(default=False),
+    refresh_request_id: str | None = Query(default=None),
+) -> dict[str, Any]:
+    try:
+        state_payload = await starter.state.response(
+            refresh=refresh,
+            refresh_request_id=refresh_request_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
+        **state_payload,
         "summary": {
             "active_config_count": len(registry.ids()),
             "recent_event_count": len(registry.recent_events),
@@ -55,6 +64,9 @@ async def _refresh_mqtt_state(*, dry_run: bool = False) -> None:
                 },
                 device_id=str(entry.get("device_id") or config_id),
             )
+
+
+starter.state.provide(_refresh_mqtt_state, source=INTEGRATION_ID)
 
 
 @router.get("/contract")
