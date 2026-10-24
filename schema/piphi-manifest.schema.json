@@ -51,6 +51,24 @@
         }
       }
     },
+    "onboarding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "manual",
+            "discovery",
+            "account",
+            "service",
+            "none"
+          ]
+        }
+      }
+    },
     "runtime": {
       "type": "object",
       "required": [
