@@ -19,6 +19,7 @@ from piphi_runtime_kit_python.fastapi import (
 
 from ..mqtt_runtime import ZigbeeMqttClient, ZigbeeMqttError, command_to_mqtt
 from ..state import append_runtime_event, commands, registry, runtime
+from ..zigbee_devices import available_commands_for
 
 router = APIRouter(tags=["commands"])
 _ledger_path = Path(
@@ -50,6 +51,20 @@ async def _execute_registered_command(
         dry_run = True
     else:
         dry_run = bool(extras.get("dry_run") or action_request.args.get("dry_run"))
+
+    if entry.get("exposes"):
+        allowed_commands = {
+            item["id"]
+            for item in available_commands_for(
+                list(entry.get("capabilities") or []),
+                list(entry.get("exposes") or []),
+            )
+        }
+        if action_request.command not in allowed_commands:
+            return AutomationActionResult.failure(
+                f"{action_request.command} is not writable for this Zigbee device",
+                metadata={"status_code": 400, "error": "command_not_writable"},
+            )
 
     try:
         mqtt_command = command_to_mqtt(

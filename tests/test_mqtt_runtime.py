@@ -221,8 +221,15 @@ def test_normalize_state_payload_maps_zigbee2mqtt_state() -> None:
     assert state["connected"] is True
     assert state["state"] is True
     assert state["brightness_percent"] == 100
-    assert state["contact_open"] is False
+    assert state["contact_open"] is True
     assert state["temperature_c"] == 19.5
+
+
+def test_normalize_contact_state_inverts_zigbee2mqtt_closed_semantic() -> None:
+    assert normalize_state_payload({"contact": True})["contact_open"] is False
+    assert normalize_state_payload({"contact": False})["contact_open"] is True
+    assert normalize_state_payload({"contact": "closed"})["contact_open"] is False
+    assert normalize_state_payload({"contact": "open"})["contact_open"] is True
 
 
 def test_decode_availability_message() -> None:
@@ -287,6 +294,40 @@ async def test_command_route_publishes_zigbee2mqtt_dry_run() -> None:
     assert command["mqtt"]["payload"] == {"state": "ON"}
 
     await runtime_state.remove_config("test-kitchen-light")
+
+
+@pytest.mark.anyio
+async def test_command_route_rejects_read_only_expose() -> None:
+    config_id = "read-only-light"
+    runtime_state.registry.set(
+        config_id,
+        {
+            "device_id": config_id,
+            "config_id": config_id,
+            "mqtt_server": "mqtt://broker.local:1883",
+            "mqtt_topic": "zigbee2mqtt/read-only-light",
+            "capabilities": ["state", "refresh"],
+            "exposes": [
+                {"capability": "state", "property": "state", "access": {"set": False}}
+            ],
+        },
+    )
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+        response = await client.post(
+            "/command",
+            json={
+                "command": "set_state",
+                "config_id": config_id,
+                "device_id": config_id,
+                "args": {"on": True},
+                "dry_run": True,
+            },
+        )
+
+    assert response.status_code == 400
+    assert "not writable" in response.json()["detail"]
+    await runtime_state.remove_config(config_id)
 
 
 @pytest.mark.anyio

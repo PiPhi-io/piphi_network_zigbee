@@ -363,11 +363,21 @@ def _color_temp_payload_value(params: dict[str, Any]) -> int:
 
 
 def _normalize_state_value(capability: str, value: Any) -> Any:
+    if capability == "contact_open":
+        # Zigbee2MQTT's contact property means the magnetic contact is closed
+        # when true. PiPhi exposes the inverse semantic: whether it is open.
+        if isinstance(value, bool):
+            return not value
+        token = str(value).strip().lower()
+        if token in {"true", "1", "closed", "on"}:
+            return False
+        if token in {"false", "0", "open", "off"}:
+            return True
+        return value
     if capability in {
         "availability",
         "battery_low",
         "carbon_monoxide",
-        "contact_open",
         "gas",
         "occupancy",
         "smoke",

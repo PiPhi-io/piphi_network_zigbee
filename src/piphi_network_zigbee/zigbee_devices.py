@@ -97,11 +97,24 @@ def capability_metadata_from_exposes(exposes: list[dict[str, Any]]) -> dict[str,
     return metadata
 
 
-def available_commands_for(capabilities: list[str]) -> list[dict[str, str]]:
+def available_commands_for(
+    capabilities: list[str],
+    exposes: list[dict[str, Any]] | None = None,
+) -> list[dict[str, str]]:
     commands = [{"id": "refresh", "label": "Refresh", "kind": "action"}]
+    writable_capabilities = {
+        str(expose.get("capability"))
+        for expose in (exposes or [])
+        if expose.get("capability")
+        and isinstance(expose.get("access"), dict)
+        and expose["access"].get("set") is True
+    }
     for capability in sorted(capabilities):
         command = CAPABILITY_COMMANDS.get(capability)
-        if command:
+        # Legacy configurations did not persist expose metadata. Preserve their
+        # existing controls, but when metadata is present fail closed unless the
+        # matching Zigbee2MQTT expose is explicitly writable.
+        if command and (exposes is None or capability in writable_capabilities):
             commands.append(
                 {
                     "id": command,
@@ -163,7 +176,10 @@ def entity_from_entry(entry: dict[str, Any]) -> dict[str, Any]:
         "device_id": entry["device_id"],
         "entity_type": "zigbee_device",
         "capabilities": capabilities,
-        "available_commands": available_commands_for(capabilities),
+        "available_commands": available_commands_for(
+            capabilities,
+            entry.get("exposes") if "exposes" in entry else None,
+        ),
         "dashboard": {
             "allowed_widgets": ["tile", "stat", "button"],
             "default_widget": "tile",
