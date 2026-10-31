@@ -69,3 +69,20 @@ def test_available_commands_follow_capabilities() -> None:
     command_ids = [command["id"] for command in commands]
 
     assert command_ids == ["refresh", "set_brightness", "set_state"]
+
+
+def test_available_commands_require_writable_exposes_when_metadata_is_present() -> None:
+    commands = available_commands_for(
+        ["state", "brightness_percent", "color_temperature_mired"],
+        [
+            {"capability": "state", "access": {"set": True}},
+            {"capability": "brightness_percent", "access": {"set": False}},
+            {"capability": "color_temperature_mired", "access": {"set": True}},
+        ],
+    )
+
+    assert [command["id"] for command in commands] == [
+        "refresh",
+        "set_color_temperature",
+        "set_state",
+    ]

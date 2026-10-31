@@ -133,12 +133,30 @@
       "device_id"
     ],
     "identity_fields": [
-      "friendly_name"
+      "ieee_address"
     ]
   },
   "identity": {
     "fields": [
+      "ieee_address"
+    ],
+    "legacy_fields": [
       "friendly_name"
+    ]
+  },
+  "ui": {
+    "kind": "application",
+    "ingress": "core_authenticated",
+    "path": "/zigbee",
+    "supports_websocket": false,
+    "show_in_sidebar": true,
+    "label": "Zigbee",
+    "experience_packages": [
+      {
+        "registry_id": "io.piphi.zigbee-devices",
+        "version_range": ">=0.1,<1",
+        "auto_install": true
+      }
     ]
   },
   "capabilities": {
@@ -406,15 +424,6 @@
       }
     }
   ],
-  "ui": {
-    "experience_packages": [
-      {
-        "registry_id": "io.piphi.zigbee-devices",
-        "version_range": ">=0.1,<1",
-        "auto_install": true
-      }
-    ]
-  },
   "onboarding": {
     "mode": "discovery"
   }
